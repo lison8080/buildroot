@@ -55,7 +55,9 @@ fi
 # 里 U-Boot 分区的 load 字段为 0，BootROM 无法定位 U-Boot，板子会卡在 BootROM。
 # 因此这里用 FSBL + u-boot(ELF) + system.dtb@0x100000 的三分区方案（与 PetaLinux 一致）。
 # FSBL 优先取 images 目录里的副本（已从 PetaLinux 工程迁出），可用 MIZ7035_FSBL_ELF 覆盖
+# FSBL 查找顺序：环境变量 → BINARIES_DIR → fpga/release → build/images
 FSBL_ELF="${MIZ7035_FSBL_ELF:-${BINARIES_DIR}/zynq_fsbl.elf}"
+[ -f "${FSBL_ELF}" ] || FSBL_ELF="/home/eva/work/z7035/fpga/release/fsbl.elf"
 [ -f "${FSBL_ELF}" ] || FSBL_ELF="/home/eva/work/z7035/linux/build/images/zynq_fsbl.elf"
 
 # U-Boot 必须包含板级 dtb；Buildroot 产出 u-boot-dtb.bin，bootgen 需要 ELF 才能自动取 load 地址

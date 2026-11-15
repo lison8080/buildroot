@@ -9,7 +9,7 @@
 #
 # 与 PetaLinux 方案的对应关系：
 #   PetaLinux            -> 本 defconfig
-#   u-boot-xlnx + FSBL   -> BR2_TARGET_UBOOT（SPL 方案，见 README）
+#   u-boot-xlnx + FSBL   -> BR2_TARGET_UBOOT（FSBL 方案，不生成 SPL）
 #   linux-xlnx           -> BR2_LINUX_KERNEL（同源码树、同 defconfig）
 #   system-user.dtsi     -> board/miz7035/dts（内核树内 zynq-miz7035.dts）
 #   rootfs + 定制        -> BR2_ROOTFS_OVERLAY（zsh/OMZ/init 脚本/驱动/app）
@@ -98,8 +98,8 @@ BR2_TARGET_UBOOT_NEEDS_PYLIBFDT=y
 BR2_TARGET_UBOOT_NEEDS_PYELFTOOLS=y
 BR2_TARGET_UBOOT_NEEDS_GNU_EFI=y
 BR2_TARGET_UBOOT_FORMAT_ELF=y
-BR2_TARGET_UBOOT_SPL=y
-BR2_TARGET_UBOOT_SPL_NAME="spl/boot.bin"
+# BR2_TARGET_UBOOT_SPL is not set
+
 BR2_TARGET_UBOOT_CUSTOM_MAKEOPTS=""
 
 # ---------------------------------------------------------------- 常用工具（对齐现有 PetaLinux rootfs）
