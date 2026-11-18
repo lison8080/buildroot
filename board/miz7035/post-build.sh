@@ -25,7 +25,7 @@ if [ -f "${TARGET_DIR}/etc/inittab" ]; then
 fi
 
 # ---------------------------------------------------------------- 2. 主机名与网络
-echo "${BOARD_NAME,,}" > "${TARGET_DIR}/etc/hostname" || true
+echo "${BOARD_NAME}" | tr '[:upper:]' '[:lower:]' > "${TARGET_DIR}/etc/hostname" || true
 
 mkdir -p "${TARGET_DIR}/etc/network"
 cat > "${TARGET_DIR}/etc/network/interfaces" <<'EOF'

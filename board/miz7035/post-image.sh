@@ -19,7 +19,7 @@ BINARIES_DIR="${BINARIES_DIR:-${BUILD_DIR}/images}"
 echo "[post-image] MIZ7035 images in ${BINARIES_DIR}"
 
 # bootgen / mkimage 由 Buildroot host 或系统提供，这里补齐常见位置
-for d in /home/eva/.local/bin /home/eva/software/xilinx/2025.2/Vivado/bin; do
+for d in /home/eva/.local/bin /home/eva/software/xilinx/Vitis/2021.2/bin /home/eva/software/xilinx/Vivado/2021.2/bin; do
     case ":${PATH}:" in *":${d}:"*) ;; *) [ -d "$d" ] && PATH="${d}:${PATH}" ;; esac
 done
 export PATH
@@ -57,14 +57,19 @@ fi
 # FSBL 优先取 images 目录里的副本（已从 PetaLinux 工程迁出），可用 MIZ7035_FSBL_ELF 覆盖
 # FSBL 查找顺序：环境变量 → BINARIES_DIR → fpga/release → build/images
 FSBL_ELF="${MIZ7035_FSBL_ELF:-${BINARIES_DIR}/zynq_fsbl.elf}"
-[ -f "${FSBL_ELF}" ] || FSBL_ELF="/home/eva/work/z7035/fpga/release/fsbl.elf"
-[ -f "${FSBL_ELF}" ] || FSBL_ELF="/home/eva/work/z7035/linux/build/images/zynq_fsbl.elf"
+# 回退到 build/images/zynq_fsbl.elf（由 hardware/system_wrapper.xsa + Vitis 生成）
+[ -f "${FSBL_ELF}" ] || FSBL_ELF="${BINARIES_DIR}/../../images/zynq_fsbl.elf"
 
-# U-Boot 必须包含板级 dtb；Buildroot 产出 u-boot-dtb.bin，bootgen 需要 ELF 才能自动取 load 地址
-if [ -f "${BINARIES_DIR}/u-boot" ]; then
-    UBOOT_PAYLOAD="u-boot"
+# 优先用裸二进制 u-boot.bin + 显式 load/startup：
+#  - bootgen 2021.2 对 Buildroot 产出的 U-Boot ELF 不会自动推导 load 地址（得到 0），
+#    BootROM 无法定位 U-Boot；显式属性最可靠。
+#  - ELF 可能带 8MB 调试符号，被打进 BOOT.BIN 会占用 8.5MB，和 QSPI kernel 布局重叠。
+if [ -f "${BINARIES_DIR}/u-boot.bin" ]; then
+    UBOOT_PAYLOAD="u-boot.bin"
 elif [ -f "${BINARIES_DIR}/u-boot.elf" ]; then
     UBOOT_PAYLOAD="u-boot.elf"
+elif [ -f "${BINARIES_DIR}/u-boot" ]; then
+    UBOOT_PAYLOAD="u-boot"
 else
     UBOOT_PAYLOAD=""
 fi
@@ -76,20 +81,21 @@ if [ -n "${UBOOT_PAYLOAD}" ] && [ -f "${FSBL_ELF}" ] && [ -e "${BINARIES_DIR}/sy
     DTB_REAL="$(readlink -f "${BINARIES_DIR}/system.dtb")"
     [ "${DTB_REAL}" -ef "${BINARIES_DIR}/boot_dtb.dtb" ] || \
         cp -f "${DTB_REAL}" "${BINARIES_DIR}/boot_dtb.dtb"
-    cat > "${BINARIES_DIR}/boot.bif" <<'BIFEOF'
+    if [ "${UBOOT_PAYLOAD}" = "u-boot.bin" ]; then
+        UBOOT_BIF_LINE="[load=0x04000000, startup=0x04000000] u-boot.bin"
+    else
+        UBOOT_BIF_LINE="${UBOOT_PAYLOAD}"
+    fi
+    cat > "${BINARIES_DIR}/boot.bif" <<BIFEOF
 // MIZ7035 boot image: FSBL + U-Boot + board DTB
 // Zynq BootROM 要求第一分区为 FSBL；U-Boot 由 FSBL 加载到 0x04000000
 the_ROM_image:
 {
 	[bootloader] zynq_fsbl.elf
-	u-boot
+	${UBOOT_BIF_LINE}
 	[load=0x100000] boot_dtb.dtb
 }
 BIFEOF
-    # bif 里的 u-boot 名字按实际 payload 替换
-    if [ "${UBOOT_PAYLOAD}" != "u-boot" ]; then
-        sed -i "s|^\tu-boot$|\t${UBOOT_PAYLOAD}|" "${BINARIES_DIR}/boot.bif"
-    fi
     if command -v bootgen >/dev/null 2>&1; then
         ( cd "${BINARIES_DIR}" && bootgen -image boot.bif -arch zynq -o BOOT.BIN -w on ) \
             && echo "[post-image] BOOT.BIN generated (FSBL + U-Boot + dtb)"
